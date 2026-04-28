@@ -1,0 +1,11 @@
+{
+  "name": "container-data-aug",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter frontend dev",
+    "build": "pnpm --filter frontend build",
+    "lint": "pnpm --filter frontend lint",
+    "start": "pnpm --filter frontend start"
+  },
+  "packageManager": "pnpm@10.20.0"
+}
