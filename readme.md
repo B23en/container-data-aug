@@ -20,9 +20,9 @@
 ## TO-DO
 `완료한 내용의 경우: 해당 내용 관련 링크 추가 → ☑︎ 마크로 수정`
 ### 4주차 진행사항
-- ☑ **기능명세서/ERD 수정** - 셔플 기능 추가 및 ERD 컨벤션 통일 [ERD.png](#erd) by `손원빈`, `최규문`
+- ☑ **기능명세서/ERD 수정** - 셔플 기능 추가 및 ERD 컨벤션 통일 [ERD.png](#erd) by `최규문`, `손원빈`
 - ☑ **프로젝트 기본 구성** - monorepo 형태로 프로젝트 구조 구성 by `손원빈`
-- ☑ **frontend 기본 레이아웃 구성** - 전체적인 기본 레이아웃 초기 구성 (shadcn 기반) by `송원호`, `손원빈`
+- ☑ **frontend 기본 레이아웃 구성** - 전체적인 기본 레이아웃 초기 구성 (shadcn 기반) [#1](./docs/screenshots/fe1.png)∙[#2](./docs/screenshots/fe2.png)∙[#3](./docs/screenshots/fe3.png)  by `손원빈`
 - ☑ **backend 기본 구성 세팅** - 파이썬 환경/FastAPI/PostGRE 환경 초기 세팅 by `서준일`
 - ◻︎ **셔플 기능 구현** - 프레임워크 핵심 기능인 셔플 기능 구현 및 테스트
 - ◻︎ **OCR 모델 평가** - 제공된 데이터셋에 대한 OCR 모델 성능 테스트
