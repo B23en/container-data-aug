@@ -2,7 +2,7 @@
 
 ## 1. 목적
 
-증강 작업에서 성공적으로 처리된 원본 이미지의 배경색 분포를 on-demand로 분석한다. 배경 픽셀을 11개 대표색으로 분류하고, 각 색의 비율(%)을 반환한다.
+증강 작업에서 성공적으로 처리된 원본 이미지의 배경색 분포를 on-demand로 분석한다. 각 원본 이미지의 배경 픽셀 평균 RGB를 구해 11개 대표색 중 1개를 선택하고, 이미지 단위 비율(%)을 반환한다.
 
 ## 2. 핵심 결정사항
 
@@ -10,7 +10,8 @@
 - 성공한 원본 이미지만 포함한다. 성공 여부는 task output 폴더의 `*_labels.csv` 존재 여부로 판단한다.
 - 원본 이미지의 배경 분포는 해당 이미지에서 생성된 variant 수(N)로 가중하여 평균한다. variant가 많이 생성된 원본일수록 결과에 더 많이 반영된다.
 - 배경 픽셀 분리는 Otsu 이진화를 사용한다. `shuffle.py`의 `_make_global_mask`를 재활용하며 CRAFT 재실행 없이 처리한다.
-- 픽셀 색 분류는 RGB 유클리드 거리 기준으로 11개 대표색 중 가장 가까운 색으로 분류한다.
+- 배경 픽셀 전체의 평균 RGB를 구한 뒤, RGB 유클리드 거리 기준으로 11개 대표색 중 가장 가까운 색 1개를 해당 이미지의 대표색으로 선택한다.
+- 픽셀 하나하나를 분류하지 않고 이미지당 대표색 1개만 선택하므로 처리가 빠르다.
 - 결과는 DB에 저장하지 않고 API 호출 시점에 계산한다 (on-demand).
 
 ## 3. 대표색 정의
@@ -31,11 +32,15 @@
 | 회색 | `gray` | (128, 128, 128) |
 | 검정 | `black` | (0, 0, 0) |
 
-픽셀 RGB와 각 대표색 RGB 사이의 유클리드 거리를 계산해 가장 가까운 색으로 분류한다.
+배경 픽셀 전체의 평균 RGB를 구한 뒤, 각 대표색 RGB와의 유클리드 거리를 계산해 가장 가까운 색 1개를 선택한다.
 
 ```python
 import math
 
+# 배경 픽셀 평균 RGB
+avg_r, avg_g, avg_b = bg_pixels.mean(axis=0).astype(int)
+
+# 가장 가까운 대표색 선택
 def classify(r: int, g: int, b: int) -> str:
     return min(REPRESENTATIVE_COLORS, key=lambda name: math.dist((r, g, b), REPRESENTATIVE_COLORS[name]))
 ```
@@ -79,23 +84,24 @@ def get_bg_color_distribution_service(request: Request) -> BgColorDistributionSe
   "taskId": 10,
   "analyzedImageCount": 3,
   "distribution": {
-    "red":    0.5,
+    "red":    0.0,
     "orange": 0.0,
     "yellow": 0.0,
-    "green":  2.3,
-    "blue":   10.1,
+    "green":  0.0,
+    "blue":   0.0,
     "purple": 0.0,
     "pink":   0.0,
-    "brown":  5.4,
-    "white":  42.7,
-    "gray":   38.1,
-    "black":  0.9
+    "brown":  0.0,
+    "white":  33.33,
+    "gray":   66.67,
+    "black":  0.0
   }
 }
 ```
 
 - `analyzedImageCount`: 분석에 포함된 원본 이미지 수 (성공한 이미지만)
-- `distribution`: 11개 대표색 각각의 비율(%). 합계는 100%.
+- `distribution`: 11개 대표색 각각의 비율(%). 이미지 단위로 집계하며 합계는 100%.
+  - 예: gray 2장(N=3), white 1장(N=1) → gray 75%, white 25%
 
 #### 에러
 
@@ -128,19 +134,21 @@ class BgColorDistributionService:
    - stem으로 `source_folder_path` 내 원본 이미지 파일을 찾는다 (jpg/png/jpeg 등 확장자 탐색).
    - CSV 데이터 행 수를 N으로 취한다 (header 제외).
    - 원본 이미지에 Otsu 이진화를 적용해 배경 픽셀을 추출한다.
-   - 배경 픽셀 각각을 11개 대표색으로 분류해 색별 픽셀 수를 구한다.
-   - 색별 비율을 계산한 뒤 N을 가중치로 누적한다.
+   - 배경 픽셀 전체의 평균 RGB를 구한다.
+   - 평균 RGB와 가장 가까운 대표색 1개를 선택한다.
+   - 해당 대표색에 N을 누적한다.
 6. 전체 가중치 합으로 나눠 최종 비율을 계산한다.
 7. `analyzedImageCount`와 `distribution`을 반환한다.
 
 #### 가중 평균 계산 예시
 
 ```
-원본A: N=3, gray=60%, white=40%
-원본B: N=1, gray=20%, white=80%
+원본A (대표색=gray): N=3 → weighted["gray"] += 3
+원본B (대표색=white): N=1 → weighted["white"] += 1
+total_weight = 4
 
-gray  = (60×3 + 20×1) / (3+1) = 50.0%
-white = (40×3 + 80×1) / (3+1) = 50.0%
+gray  = 3/4 × 100 = 75.0%
+white = 1/4 × 100 = 25.0%
 ```
 
 #### 원본 이미지 탐색
@@ -160,15 +168,17 @@ def find_source_image(source_folder: Path, stem: str) -> Path | None:
 
 단, label CSV가 output 폴더의 하위 디렉터리에 있을 경우 원본 이미지도 동일한 상대 경로로 탐색한다.
 
-#### Otsu 배경 마스크
+#### Otsu 배경 마스크 및 대표색 선택
 
 `shuffle.py`의 `_make_global_mask`를 그대로 재사용한다.
 
 ```python
 from app.augmentation.shuffle import _make_global_mask
 
-mask = _make_global_mask(image)   # 글자=True, 배경=False
-bg_pixels = image[~mask]          # 배경 픽셀만 추출
+mask = _make_global_mask(image)      # mask==0: 배경, mask==255: 글자
+bg_pixels = img_arr[mask_arr == 0]   # 배경 픽셀만 추출
+avg_r, avg_g, avg_b = bg_pixels.mean(axis=0).astype(int)  # 평균 RGB
+representative = classify(avg_r, avg_g, avg_b)             # 대표색 1개 선택
 ```
 
 ## 7. 스키마 설계
