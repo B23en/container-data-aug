@@ -7,13 +7,19 @@ from app.schemas.augmentation_tasks import (
     AugmentationTaskCreate,
     AugmentationTaskResponse,
 )
+from app.schemas.char_distribution import CharDistributionResponse
 from app.services.augmentation_service import AugmentationService
+from app.services.char_distribution_service import CharDistributionService
 
 router = APIRouter(tags=["augmentation-tasks"])
 
 
 def get_augmentation_service(request: Request) -> AugmentationService:
     return request.app.state.augmentation_service
+
+
+def get_char_distribution_service(request: Request) -> CharDistributionService:
+    return request.app.state.char_distribution_service
 
 
 @router.post(
@@ -80,3 +86,15 @@ def get_result(
     augmentation_service: AugmentationService = Depends(get_augmentation_service),
 ) -> dict:
     return augmentation_service.get_result(task_id)
+
+
+@router.get(
+    "/augmentation-tasks/{task_id}/char-distribution",
+    response_model=CharDistributionResponse,
+    responses=ERROR_RESPONSES,
+)
+def get_char_distribution(
+    task_id: int,
+    char_distribution_service: CharDistributionService = Depends(get_char_distribution_service),
+) -> dict:
+    return char_distribution_service.get_distribution(task_id)
