@@ -72,7 +72,7 @@ class BgColorDistributionService:
                 continue
 
             try:
-                ratios = _analyze_background(src_image)
+                representative = _representative_color(src_image)
             except Exception as exc:
                 raise ApiError(
                     "INTERNAL_SERVER_ERROR",
@@ -80,8 +80,7 @@ class BgColorDistributionService:
                     status_code=500,
                 ) from exc
 
-            for color, ratio in ratios.items():
-                weighted[color] += ratio * n
+            weighted[representative] += n
             total_weight += n
             analyzed_count += 1
 
@@ -89,7 +88,7 @@ class BgColorDistributionService:
             distribution = {color: 0.0 for color in REPRESENTATIVE_COLORS}
         else:
             distribution = {
-                color: round(weighted[color] / total_weight, 2)
+                color: round(weighted[color] / total_weight * 100, 2)
                 for color in REPRESENTATIVE_COLORS
             }
 
@@ -117,7 +116,7 @@ def _find_source_image(directory: Path, stem: str) -> Path | None:
     return None
 
 
-def _analyze_background(image_path: Path) -> dict[str, float]:
+def _representative_color(image_path: Path) -> str:
     with Image.open(image_path) as raw:
         image = raw.convert("RGB")
 
@@ -125,18 +124,13 @@ def _analyze_background(image_path: Path) -> dict[str, float]:
     mask_arr = np.array(mask)
     img_arr = np.array(image)
 
-    # 마스크 0 = 배경 픽셀
+    # 배경 픽셀 평균 RGB → 대표색 1개 선택
     bg_pixels = img_arr[mask_arr == 0]
     if len(bg_pixels) == 0:
-        return {color: 0.0 for color in REPRESENTATIVE_COLORS}
+        return "gray"
 
-    counts: dict[str, int] = {color: 0 for color in REPRESENTATIVE_COLORS}
-    for r, g, b in bg_pixels:
-        color = _classify(int(r), int(g), int(b))
-        counts[color] += 1
-
-    total = len(bg_pixels)
-    return {color: round(cnt / total * 100, 4) for color, cnt in counts.items()}
+    avg_r, avg_g, avg_b = bg_pixels.mean(axis=0).astype(int)
+    return _classify(int(avg_r), int(avg_g), int(avg_b))
 
 
 def _classify(r: int, g: int, b: int) -> str:
