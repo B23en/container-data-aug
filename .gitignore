@@ -132,6 +132,8 @@ __pypackages__/
 
 # Backend runtime state (DB is now the source of truth)
 backend/data/
+shared/data/*
+!shared/data/.gitkeep
 
 # =========================
 # Docker
