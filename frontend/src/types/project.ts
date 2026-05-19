@@ -93,8 +93,22 @@ export type AugmentationResult = {
   totalImageCount: number
   successCount: number
   failedCount: number
+  variantsPerImage: number
+  generatedImageCount: number
   runOcrLabeling: boolean
   outputFolderPath: string
   /** ISO 8601 timestamp. */
   completedAt: string
+}
+
+export type CharDistribution = {
+  taskId: number
+  letters: Record<string, number>
+  digits: Record<string, number>
+}
+
+export type BgColorDistribution = {
+  taskId: number
+  analyzedImageCount: number
+  distribution: Record<string, number>
 }

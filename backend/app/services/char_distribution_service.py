@@ -13,6 +13,27 @@ class CharDistributionService:
         self._db = db
 
     def get_distribution(self, task_id: int) -> dict:
+        task = self._require_finished_task(task_id)
+        with self._db.connect() as conn:
+            cached = tasks_repo.get_char_distribution_cache(conn, task_id)
+        if cached is not None:
+            return {
+                "task_id": task_id,
+                "letters": cached["letters"],
+                "digits": cached["digits"],
+            }
+
+        result = self._compute_distribution(task)
+        self._save_distribution(result)
+        return result
+
+    def cache_distribution(self, task_id: int) -> dict:
+        task = self._require_finished_task(task_id)
+        result = self._compute_distribution(task)
+        self._save_distribution(result)
+        return result
+
+    def _require_finished_task(self, task_id: int) -> dict:
         with self._db.connect() as conn:
             task = tasks_repo.get_by_id(conn, task_id)
 
@@ -31,7 +52,9 @@ class CharDistributionService:
                 status_code=409,
                 details={"taskId": task_id, "status": task["status"]},
             )
+        return task
 
+    def _compute_distribution(self, task: dict) -> dict:
         letters: dict[str, int] = {}
         digits: dict[str, int] = {}
 
@@ -40,10 +63,19 @@ class CharDistributionService:
             _accumulate(csv_path, letters, digits)
 
         return {
-            "task_id": task_id,
+            "task_id": task["id"],
             "letters": letters,
             "digits": digits,
         }
+
+    def _save_distribution(self, result: dict) -> None:
+        with self._db.connect() as conn:
+            tasks_repo.save_char_distribution_cache(
+                conn,
+                result["task_id"],
+                letters=result["letters"],
+                digits=result["digits"],
+            )
 
 
 def _accumulate(

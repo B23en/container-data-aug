@@ -9,6 +9,8 @@ from app.core.errors import ApiError
 from app.repositories import projects_repo, tasks_repo
 from app.repositories.postgres import PostgresDatabase
 from app.schemas.augmentation_tasks import AugmentationTaskCreate
+from app.services.bg_color_distribution_service import BgColorDistributionService
+from app.services.char_distribution_service import CharDistributionService
 from app.services.folder_scanner import scan_folder
 from app.services.project_service import ProjectService
 
@@ -19,10 +21,16 @@ FINISHED_STATUSES = {"DONE", "FAILED", "STOPPED"}
 
 class AugmentationService:
     def __init__(
-        self, db: PostgresDatabase, project_service: ProjectService
+        self,
+        db: PostgresDatabase,
+        project_service: ProjectService,
+        char_distribution_service: CharDistributionService | None = None,
+        bg_color_distribution_service: BgColorDistributionService | None = None,
     ) -> None:
         self.db = db
         self.project_service = project_service
+        self.char_distribution_service = char_distribution_service
+        self.bg_color_distribution_service = bg_color_distribution_service
 
     def create_task(
         self, project_id: int, payload: AugmentationTaskCreate
@@ -94,6 +102,7 @@ class AugmentationService:
                 scan = scan_folder(source_folder)
                 if not scan.image_files:
                     tasks_repo.finish(conn, task_id, "DONE", progress=100)
+                    self._cache_distributions(task_id)
                     return
 
                 try:
@@ -131,6 +140,7 @@ class AugmentationService:
                         return
 
                 tasks_repo.finish(conn, task_id, "DONE", progress=100)
+                self._cache_distributions(task_id)
             except Exception:
                 tasks_repo.finish(conn, task_id, "FAILED")
 
@@ -228,6 +238,19 @@ class AugmentationService:
         if callable(prepare):
             prepare()
         return reader
+
+    def _cache_distributions(self, task_id: int) -> None:
+        services = (
+            self.char_distribution_service,
+            self.bg_color_distribution_service,
+        )
+        for service in services:
+            if service is None:
+                continue
+            try:
+                service.cache_distribution(task_id)
+            except Exception:
+                continue
 
     def _validate_start_payload(self, payload: AugmentationTaskCreate) -> None:
         if payload.worker_count < 1:

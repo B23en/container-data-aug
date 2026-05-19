@@ -99,6 +99,10 @@ export function AppShell() {
   // Rescan flow state (task [9]).
   const [isRescanning, setIsRescanning] = useState(false)
   const [rescanError, setRescanError] = useState<string | null>(null)
+  const [isOpeningLatestResult, setIsOpeningLatestResult] = useState(false)
+  const [latestResultError, setLatestResultError] = useState<string | null>(
+    null,
+  )
 
   // Augmentation flow state (task [5]).
   const [optionsDialogOpen, setOptionsDialogOpen] = useState(false)
@@ -363,10 +367,12 @@ export function AppShell() {
     setProjectDescription("")
     setTargetSpec(DEFAULT_TARGET_SPEC)
     setCreateError(null)
+    setLatestResultError(null)
     setViewMode("create")
   }
 
   function selectProject(projectId: number) {
+    setLatestResultError(null)
     // If this project is the one currently being augmented, jump straight
     // back to the live progress view instead of the static detail view.
     // Lets users tab away to peek at other projects without losing their
@@ -595,11 +601,36 @@ export function AppShell() {
     }
   }
 
+  async function openLatestResult() {
+    const latestTask = detailForView?.latestTask
+    if (
+      latestTask === null ||
+      latestTask === undefined ||
+      latestTask.status !== "DONE" ||
+      isOpeningLatestResult
+    ) {
+      return
+    }
+
+    setIsOpeningLatestResult(true)
+    setLatestResultError(null)
+    try {
+      const result = await tasksApi.result(latestTask.id)
+      setAugmentationResult(result)
+      setViewMode("result")
+    } catch (error) {
+      setLatestResultError(describeResultError(error))
+    } finally {
+      setIsOpeningLatestResult(false)
+    }
+  }
+
   function backToProjectDetail() {
     setActiveTask(null)
     setActiveTaskId(null)
     setAugmentationResult(null)
     setAugmentationActionError(null)
+    setLatestResultError(null)
     setViewMode("detail")
   }
 
@@ -667,9 +698,12 @@ export function AppShell() {
             isDeleting={isDeleting}
             isRescanning={isRescanning}
             rescanError={rescanError}
+            latestResultError={latestResultError}
+            isOpeningLatestResult={isOpeningLatestResult}
             onStartAugmentation={openAugmentationOptions}
             onRequestDelete={requestDeleteProject}
             onRescan={rescanProject}
+            onOpenLatestResult={openLatestResult}
           />
         )}
 

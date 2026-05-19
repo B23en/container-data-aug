@@ -15,9 +15,11 @@ import type {
   ApiListResponse,
 } from "@/types/api"
 import type {
+  BgColorDistribution,
   AugmentationResult,
   AugmentationTask,
   AugmentationTaskCreateRequest,
+  CharDistribution,
   Project,
   ProjectCreateRequest,
   ProjectDetail,
@@ -179,6 +181,18 @@ export const augmentationTasks = {
   result: (taskId: number, signal?: AbortSignal) =>
     request<AugmentationResult>(
       `/augmentation-tasks/${taskId}/result`,
+      { signal },
+    ),
+
+  charDistribution: (taskId: number, signal?: AbortSignal) =>
+    request<CharDistribution>(
+      `/augmentation-tasks/${taskId}/char-distribution`,
+      { signal },
+    ),
+
+  bgColorDistribution: (taskId: number, signal?: AbortSignal) =>
+    request<BgColorDistribution>(
+      `/augmentation-tasks/${taskId}/bg-color-distribution`,
       { signal },
     ),
 }

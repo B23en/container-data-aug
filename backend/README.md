@@ -50,8 +50,12 @@ The file is generated at runtime and stores project metadata, augmentation task 
 - `GET /api/augmentation-tasks/{taskId}`
 - `POST /api/augmentation-tasks/{taskId}/stop`
 - `GET /api/augmentation-tasks/{taskId}/result`
+- `GET /api/augmentation-tasks/{taskId}/char-distribution`
+- `GET /api/augmentation-tasks/{taskId}/bg-color-distribution`
 
 The augmentation task runs the shuffle augmentation pipeline for every scanned image while preserving relative output paths. `variantsPerImage` controls how many shuffled images are generated per source image. `runOcrLabeling` is stored for API compatibility but does not currently change runner behavior.
+
+Distribution endpoints keep their response shape separate from `/result`. The backend caches character and background-color distributions on the `augmentation_tasks` row after a task reaches `DONE`; if the cache is missing, the endpoint recomputes the distribution and stores it before returning.
 
 ## GLM-OCR Runtime
 

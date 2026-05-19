@@ -54,9 +54,14 @@ def create_app(
         yield
 
     project_service = ProjectService(db)
-    augmentation_service = AugmentationService(db, project_service)
     char_distribution_service = CharDistributionService(db)
     bg_color_distribution_service = BgColorDistributionService(db)
+    augmentation_service = AugmentationService(
+        db,
+        project_service,
+        char_distribution_service,
+        bg_color_distribution_service,
+    )
 
     app = FastAPI(
         title="Container Image Augmentation API",

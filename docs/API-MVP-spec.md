@@ -222,6 +222,42 @@ MVP에서는 별도 `AugmentationConfig` 테이블을 만들지 않고 작업 ro
 - 실제 증강 구현에서는 정상 처리된 원본 이미지마다 `variantsPerImage`개의 결과물이 생성되는 것이 기본 동작이다.
 - 현재 shuffle runner에서는 정상 처리된 원본 이미지마다 실제 저장된 셔플 결과 파일 수가 `generatedImageCount`에 누적된다.
 
+### 6.4 Distribution Results
+
+문자 분포와 배경색 분포는 public 응답 shape를 분리해 유지한다. 계산 결과는 `augmentation_tasks` row의 JSONB 캐시 컬럼에 저장하며, `DONE` 직후 자동 계산을 시도한다. 캐시가 없는 경우 distribution API가 재계산 후 저장한다.
+
+`CharDistribution`:
+
+```json
+{
+  "taskId": 10,
+  "letters": { "M": 5, "S": 5, "C": 5, "U": 5 },
+  "digits": { "1": 5, "2": 5, "3": 5 }
+}
+```
+
+`BgColorDistribution`:
+
+```json
+{
+  "taskId": 10,
+  "analyzedImageCount": 3,
+  "distribution": {
+    "red": 0.0,
+    "orange": 0.0,
+    "yellow": 0.0,
+    "green": 0.0,
+    "blue": 0.0,
+    "purple": 0.0,
+    "pink": 0.0,
+    "brown": 0.0,
+    "white": 25.0,
+    "gray": 75.0,
+    "black": 0.0
+  }
+}
+```
+
 ## 7. MVP Endpoints
 
 ### 7.1 Health Check
@@ -537,6 +573,30 @@ Response `200`: 중단된 `AugmentationTask`
 
 Response `200`: `AugmentationResult`
 
+### GET `/api/augmentation-tasks/{taskId}/char-distribution`
+
+작업 산출물의 문자 분포를 조회한다.
+
+상태 규칙:
+
+- `DONE`, `FAILED`, `STOPPED` 상태에서 조회 가능하다.
+- `PENDING`, `RUNNING` 상태면 `409 TASK_NOT_FINISHED`.
+- 프론트엔드는 UX 단순화를 위해 `DONE` 작업에만 결과 보기 진입을 노출한다.
+
+Response `200`: `CharDistribution`
+
+### GET `/api/augmentation-tasks/{taskId}/bg-color-distribution`
+
+작업 산출물의 배경색 분포를 조회한다. 배경색은 원본 이미지 기준으로 분석하고, 각 원본의 생성 variant 수로 가중한다.
+
+상태 규칙:
+
+- `DONE`, `FAILED`, `STOPPED` 상태에서 조회 가능하다.
+- `PENDING`, `RUNNING` 상태면 `409 TASK_NOT_FINISHED`.
+- 프론트엔드는 UX 단순화를 위해 `DONE` 작업에만 결과 보기 진입을 노출한다.
+
+Response `200`: `BgColorDistribution`
+
 ## 8. MVP 프론트엔드 연동 흐름
 
 ### 8.1 앱 초기 실행
@@ -584,8 +644,11 @@ Response `200`: `AugmentationResult`
 
 1. 프론트엔드가 `AugmentationResult`를 표시한다.
 2. `generatedImageCount`를 실제 생성된 증강 결과물 수로 보여준다.
-3. 사용자가 `저장 폴더 위치 확인`을 누르면 프론트엔드가 `POST /api/local-folders/open`에 `outputFolderPath`를 전달하고, 백엔드가 OS 파일 탐색기로 결과 폴더를 연다.
-4. 결과 화면은 저장 폴더 경로를 별도 안내 문구로 노출하지 않는다.
+3. 결과 화면 하단의 분포 분석 섹션에서 `GET /api/augmentation-tasks/{taskId}/char-distribution`와 `GET /api/augmentation-tasks/{taskId}/bg-color-distribution`를 병렬 호출한다.
+4. 문자 분포 패널과 배경색 분포 패널은 각각 독립적인 loading, empty, error, retry 상태를 가진다.
+5. 사용자가 `저장 폴더 위치 확인`을 누르면 프론트엔드가 `POST /api/local-folders/open`에 `outputFolderPath`를 전달하고, 백엔드가 OS 파일 탐색기로 결과 폴더를 연다.
+6. 결과 화면은 저장 폴더 경로를 별도 안내 문구로 노출하지 않는다.
+7. 프로젝트 상세의 최근 작업이 `DONE`이면 결과 화면을 다시 열 수 있다.
 
 ## 9. MVP 구현 순서
 
@@ -613,6 +676,8 @@ Response `200`: `AugmentationResult`
    - `GET /api/augmentation-tasks/{taskId}`
    - `POST /api/augmentation-tasks/{taskId}/stop`
    - `GET /api/augmentation-tasks/{taskId}/result`
+   - `GET /api/augmentation-tasks/{taskId}/char-distribution`
+   - `GET /api/augmentation-tasks/{taskId}/bg-color-distribution`
 6. 최소 증강 처리 구현
    - 현재 구현은 CRAFT/GLM-OCR 기반 문자 인식 후 셔플 증강 이미지를 생성한다.
    - 개별 이미지 인식/셔플 실패는 해당 이미지 실패로 집계하고 다음 이미지를 계속 처리한다.

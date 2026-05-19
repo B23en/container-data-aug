@@ -3,10 +3,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.main import create_app
 from app.repositories.postgres import PostgresDatabase
-from app.services import augmentation_service
+from app.services import augmentation_service, char_distribution_service
 
 
 @contextmanager
@@ -47,6 +48,36 @@ def assert_error(response, code: str) -> None:
     body = response.json()
     assert "error" in body
     assert body["error"]["code"] == code
+
+
+def insert_done_task(
+    db: PostgresDatabase,
+    *,
+    project_id: int,
+    output_folder: Path,
+    total_image_count: int = 1,
+    processed_count: int = 1,
+    failed_count: int = 0,
+    generated_image_count: int = 1,
+) -> int:
+    with db.connect() as conn:
+        row = conn.execute(
+            "INSERT INTO augmentation_tasks "
+            "(project_id, status, progress, output_folder_name, "
+            " output_folder_path, total_image_count, processed_count, "
+            " failed_count, generated_image_count, completed_at) "
+            "VALUES (%s, 'DONE', 100, 'out', %s, %s, %s, %s, %s, now()) "
+            "RETURNING id",
+            (
+                project_id,
+                str(output_folder),
+                total_image_count,
+                processed_count,
+                failed_count,
+                generated_image_count,
+            ),
+        ).fetchone()
+    return row["id"]
 
 
 def patch_shuffle_runner(
@@ -225,6 +256,152 @@ def test_start_task_shuffles_images_and_returns_result(
         }
 
 
+def test_char_distribution_uses_cached_result(
+    tmp_path: Path, db: PostgresDatabase
+) -> None:
+    source = create_image_folder(tmp_path)
+    output = tmp_path / "dataset-augmented"
+    output.mkdir()
+    label_csv = output / "001_labels.csv"
+    label_csv.write_text(
+        "filename,ocr_result,0\n"
+        "001_1.jpg,MSCU1234567,0\n"
+        "001_2.jpg,UMSC7654321,0\n",
+        encoding="utf-8",
+    )
+
+    with make_client(db) as client:
+        project = create_project(client, source)
+        task_id = insert_done_task(
+            db,
+            project_id=project["id"],
+            output_folder=output,
+            generated_image_count=2,
+        )
+
+        response = client.get(
+            f"/api/augmentation-tasks/{task_id}/char-distribution"
+        )
+        assert response.status_code == 200
+        assert response.json() == {
+            "taskId": task_id,
+            "letters": {"M": 2, "S": 2, "C": 2, "U": 2},
+            "digits": {
+                "1": 2,
+                "2": 2,
+                "3": 2,
+                "4": 2,
+                "5": 2,
+                "6": 2,
+                "7": 2,
+            },
+        }
+
+        label_csv.write_text(
+            "filename,ocr_result,0\n001_1.jpg,AAAA0000000,0\n",
+            encoding="utf-8",
+        )
+        cached_response = client.get(
+            f"/api/augmentation-tasks/{task_id}/char-distribution"
+        )
+        assert cached_response.status_code == 200
+        assert cached_response.json() == response.json()
+
+
+def test_bg_color_distribution_uses_variant_weighted_cache(
+    tmp_path: Path, db: PostgresDatabase
+) -> None:
+    source = tmp_path / "dataset"
+    nested = source / "nested"
+    nested.mkdir(parents=True)
+    Image.new("RGB", (16, 16), (128, 128, 128)).save(source / "001.jpg")
+    Image.new("RGB", (16, 16), (255, 255, 255)).save(nested / "002.png")
+    (source / "labels.csv").write_text("file,label\n", encoding="utf-8")
+
+    output = tmp_path / "dataset-augmented"
+    output_nested = output / "nested"
+    output_nested.mkdir(parents=True)
+    (output / "001_labels.csv").write_text(
+        "filename,ocr_result\n"
+        "001_1.jpg,MSCU1234567\n"
+        "001_2.jpg,MSCU1234567\n"
+        "001_3.jpg,MSCU1234567\n",
+        encoding="utf-8",
+    )
+    (output_nested / "002_labels.csv").write_text(
+        "filename,ocr_result\n002_1.png,ABCD1234567\n",
+        encoding="utf-8",
+    )
+
+    with make_client(db) as client:
+        project = create_project(client, source)
+        task_id = insert_done_task(
+            db,
+            project_id=project["id"],
+            output_folder=output,
+            total_image_count=2,
+            processed_count=2,
+            generated_image_count=4,
+        )
+
+        response = client.get(
+            f"/api/augmentation-tasks/{task_id}/bg-color-distribution"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["taskId"] == task_id
+        assert body["analyzedImageCount"] == 2
+        assert body["distribution"]["gray"] == 75.0
+        assert body["distribution"]["white"] == 25.0
+
+        (output / "001_labels.csv").write_text(
+            "filename,ocr_result\n001_1.jpg,MSCU1234567\n",
+            encoding="utf-8",
+        )
+        cached_response = client.get(
+            f"/api/augmentation-tasks/{task_id}/bg-color-distribution"
+        )
+        assert cached_response.status_code == 200
+        assert cached_response.json() == body
+
+
+def test_distribution_cache_failure_does_not_fail_done_task(
+    tmp_path: Path, db: PostgresDatabase, monkeypatch
+) -> None:
+    patch_shuffle_runner(monkeypatch)
+
+    def fail_cache(self, task_id: int) -> dict:
+        raise RuntimeError("cache unavailable")
+
+    monkeypatch.setattr(
+        char_distribution_service.CharDistributionService,
+        "cache_distribution",
+        fail_cache,
+    )
+
+    source = create_image_folder(tmp_path)
+    with make_client(db) as client:
+        project = create_project(client, source)
+
+        response = client.post(
+            f"/api/projects/{project['id']}/augmentation-tasks",
+            json={
+                "workerCount": 1,
+                "runOcrLabeling": True,
+                "variantsPerImage": 2,
+                "outputFolderName": "dataset-augmented",
+            },
+        )
+        assert response.status_code == 201
+        created_task = response.json()
+
+        task_response = client.get(
+            f"/api/augmentation-tasks/{created_task['id']}"
+        )
+        assert task_response.status_code == 200
+        assert task_response.json()["status"] == "DONE"
+
+
 def test_start_task_counts_per_image_shuffle_failures(
     tmp_path: Path, db: PostgresDatabase, monkeypatch
 ) -> None:
@@ -377,6 +554,16 @@ def test_active_task_blocks_second_task_and_result_until_finished(
         )
         assert result_response.status_code == 409
         assert_error(result_response, "TASK_NOT_FINISHED")
+        char_response = client.get(
+            f"/api/augmentation-tasks/{first_task['id']}/char-distribution"
+        )
+        bg_response = client.get(
+            f"/api/augmentation-tasks/{first_task['id']}/bg-color-distribution"
+        )
+        assert char_response.status_code == 409
+        assert_error(char_response, "TASK_NOT_FINISHED")
+        assert bg_response.status_code == 409
+        assert_error(bg_response, "TASK_NOT_FINISHED")
 
         second_response = client.post(
             f"/api/projects/{project['id']}/augmentation-tasks",

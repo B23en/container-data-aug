@@ -2,11 +2,11 @@
 
 ## 1. 목적
 
-증강 작업이 완료된 후, 생성된 증강 이미지 전체에서 영문자(A–Z)와 숫자(0–9) 각각의 출현 횟수를 집계하는 on-demand API 모듈을 정의한다.
+증강 작업이 완료된 후, 생성된 증강 이미지 전체에서 영문자(A–Z)와 숫자(0–9) 각각의 출현 횟수를 집계하고 DB 캐시를 통해 재조회 비용을 줄이는 API 모듈을 정의한다.
 
 ## 2. 핵심 결정사항
 
-- 글자 수 분포는 DB에 저장하지 않는다. API 호출 시점에 label CSV를 파싱해 계산한다.
+- 글자 수 분포는 `augmentation_tasks` row에 JSONB로 캐시한다. `DONE` 직후 자동 계산해 저장하고, 캐시가 없으면 API 호출 시점에 label CSV를 파싱한 뒤 저장한다.
 - 데이터 소스는 `shuffle.py`가 출력 폴더에 생성한 `{stem}_labels.csv`의 `ocr_result` 컬럼이다. OCR을 재실행하지 않는다.
 - 집계 단위는 variant 전체다. 원본 이미지 1장에서 N개의 variant가 생성되면 각 variant의 `ocr_result`를 모두 더한다. 동일 원본의 variant는 글자 구성이 같으므로 N배로 누적된다.
 - 영문자와 숫자를 별도 딕셔너리로 분리해 반환한다.
@@ -99,9 +99,10 @@ class CharDistributionService:
 
 1. DB에서 `task_id`로 `output_folder_path`와 `status`를 조회한다.
 2. `status`가 `PENDING` 또는 `RUNNING`이면 `409 TASK_NOT_FINISHED`를 raise한다.
-3. `output_folder_path` 하위에서 `*_labels.csv` 파일을 재귀 탐색한다.
-4. 각 CSV의 `ocr_result` 컬럼을 읽어 문자별 카운트를 누적한다.
-5. 누적 결과를 `letters`(A–Z)와 `digits`(0–9)로 분리해 반환한다.
+3. 캐시 컬럼(`char_distribution_letters`, `char_distribution_digits`)이 모두 있으면 즉시 반환한다.
+4. 캐시가 없으면 `output_folder_path` 하위에서 `*_labels.csv` 파일을 재귀 탐색한다.
+5. 각 CSV의 `ocr_result` 컬럼을 읽어 문자별 카운트를 누적한다.
+6. 누적 결과를 `letters`(A–Z)와 `digits`(0–9)로 분리해 `augmentation_tasks`에 저장한 뒤 반환한다.
 
 #### 글자 분류 기준
 
@@ -156,7 +157,6 @@ filename,ocr_result,0,1,2,3,4,5,6,7,8,9,10
 
 ## 9. 다음 단계로 미룰 기능
 
-- 분포 결과 DB 캐싱 (작업 완료 시 자동 저장 후 재계산 생략)
 - 소문자 처리 (현재 runner는 대문자만 생성)
 - 특수문자 포함 여부 집계
 - 프로젝트 단위 누적 분포 조회

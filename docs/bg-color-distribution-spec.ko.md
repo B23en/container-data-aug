@@ -2,7 +2,7 @@
 
 ## 1. 목적
 
-증강 작업에서 성공적으로 처리된 원본 이미지의 배경색 분포를 on-demand로 분석한다. 각 원본 이미지의 배경 픽셀 평균 RGB를 구해 11개 대표색 중 1개를 선택하고, 이미지 단위 비율(%)을 반환한다.
+증강 작업에서 성공적으로 처리된 원본 이미지의 배경색 분포를 분석하고 DB 캐시를 통해 재조회 비용을 줄인다. 각 원본 이미지의 배경 픽셀 평균 RGB를 구해 11개 대표색 중 1개를 선택하고, 이미지 단위 비율(%)을 반환한다.
 
 ## 2. 핵심 결정사항
 
@@ -12,7 +12,7 @@
 - 배경 픽셀 분리는 Otsu 이진화를 사용한다. `shuffle.py`의 `_make_global_mask`를 재활용하며 CRAFT 재실행 없이 처리한다.
 - 배경 픽셀 전체의 평균 RGB를 구한 뒤, RGB 유클리드 거리 기준으로 11개 대표색 중 가장 가까운 색 1개를 해당 이미지의 대표색으로 선택한다.
 - 픽셀 하나하나를 분류하지 않고 이미지당 대표색 1개만 선택하므로 처리가 빠르다.
-- 결과는 DB에 저장하지 않고 API 호출 시점에 계산한다 (on-demand).
+- 결과는 `augmentation_tasks` row에 JSONB로 캐시한다. `DONE` 직후 자동 계산해 저장하고, 캐시가 없으면 API 호출 시점에 다시 계산한 뒤 저장한다.
 
 ## 3. 대표색 정의
 
@@ -129,16 +129,17 @@ class BgColorDistributionService:
 1. DB에서 `task_id`로 `status`, `output_folder_path`, `project_id`를 조회한다.
 2. `status`가 `PENDING` 또는 `RUNNING`이면 `409 TASK_NOT_FINISHED`를 raise한다.
 3. DB에서 `project_id`로 `source_folder_path`를 조회한다.
-4. `output_folder_path` 하위에서 `*_labels.csv`를 재귀 탐색한다.
-5. 각 CSV에서:
+4. 캐시 컬럼(`bg_color_distribution`, `bg_color_analyzed_image_count`)이 모두 있으면 즉시 반환한다.
+5. 캐시가 없으면 `output_folder_path` 하위에서 `*_labels.csv`를 재귀 탐색한다.
+6. 각 CSV에서:
    - stem으로 `source_folder_path` 내 원본 이미지 파일을 찾는다 (jpg/png/jpeg 등 확장자 탐색).
    - CSV 데이터 행 수를 N으로 취한다 (header 제외).
    - 원본 이미지에 Otsu 이진화를 적용해 배경 픽셀을 추출한다.
    - 배경 픽셀 전체의 평균 RGB를 구한다.
    - 평균 RGB와 가장 가까운 대표색 1개를 선택한다.
    - 해당 대표색에 N을 누적한다.
-6. 전체 가중치 합으로 나눠 최종 비율을 계산한다.
-7. `analyzedImageCount`와 `distribution`을 반환한다.
+7. 전체 가중치 합으로 나눠 최종 비율을 계산한다.
+8. `analyzedImageCount`와 `distribution`을 `augmentation_tasks`에 저장한 뒤 반환한다.
 
 #### 가중 평균 계산 예시
 
@@ -201,7 +202,6 @@ class BgColorDistributionResponse(CamelModel):
 
 ## 9. 다음 단계로 미룰 기능
 
-- 분포 결과 DB 캐싱
 - HSV/LAB 색공간 기반 분류 (더 정확한 색 인식)
 - 대표색 수 파라미터화 (K-means 방식)
 - 썸네일 다운샘플링으로 처리 속도 최적화

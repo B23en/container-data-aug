@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS augmentation_tasks (
     generated_image_count INTEGER NOT NULL DEFAULT 0,
 
     resource_usage JSONB,
+    char_distribution_letters JSONB,
+    char_distribution_digits JSONB,
+    char_distribution_computed_at TIMESTAMPTZ,
+    bg_color_distribution JSONB,
+    bg_color_analyzed_image_count INTEGER,
+    bg_color_distribution_computed_at TIMESTAMPTZ,
 
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
@@ -95,3 +101,11 @@ CREATE INDEX IF NOT EXISTS idx_augmentation_tasks_status
 CREATE UNIQUE INDEX IF NOT EXISTS uq_only_one_active_augmentation_task
     ON augmentation_tasks ((true))
     WHERE status IN ('PENDING', 'RUNNING');
+
+ALTER TABLE augmentation_tasks
+    ADD COLUMN IF NOT EXISTS char_distribution_letters JSONB,
+    ADD COLUMN IF NOT EXISTS char_distribution_digits JSONB,
+    ADD COLUMN IF NOT EXISTS char_distribution_computed_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS bg_color_distribution JSONB,
+    ADD COLUMN IF NOT EXISTS bg_color_analyzed_image_count INTEGER,
+    ADD COLUMN IF NOT EXISTS bg_color_distribution_computed_at TIMESTAMPTZ;

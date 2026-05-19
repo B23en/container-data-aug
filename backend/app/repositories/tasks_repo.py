@@ -1,6 +1,7 @@
 from typing import Any
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from app.repositories._mappers import task_row
 
@@ -98,6 +99,90 @@ def get_status(conn: psycopg.Connection, task_id: int) -> str | None:
         {"task_id": task_id},
     ).fetchone()
     return row["status"] if row is not None else None
+
+
+def get_char_distribution_cache(
+    conn: psycopg.Connection, task_id: int
+) -> dict[str, dict[str, int]] | None:
+    row = conn.execute(
+        "SELECT char_distribution_letters, char_distribution_digits "
+        "FROM augmentation_tasks "
+        "WHERE id = %(task_id)s",
+        {"task_id": task_id},
+    ).fetchone()
+    if (
+        row is None
+        or row["char_distribution_letters"] is None
+        or row["char_distribution_digits"] is None
+    ):
+        return None
+    return {
+        "letters": dict(row["char_distribution_letters"]),
+        "digits": dict(row["char_distribution_digits"]),
+    }
+
+
+def save_char_distribution_cache(
+    conn: psycopg.Connection,
+    task_id: int,
+    *,
+    letters: dict[str, int],
+    digits: dict[str, int],
+) -> None:
+    conn.execute(
+        "UPDATE augmentation_tasks SET "
+        "char_distribution_letters = %(letters)s, "
+        "char_distribution_digits = %(digits)s, "
+        "char_distribution_computed_at = now() "
+        "WHERE id = %(task_id)s",
+        {
+            "task_id": task_id,
+            "letters": Jsonb(letters),
+            "digits": Jsonb(digits),
+        },
+    )
+
+
+def get_bg_color_distribution_cache(
+    conn: psycopg.Connection, task_id: int
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT bg_color_distribution, bg_color_analyzed_image_count "
+        "FROM augmentation_tasks "
+        "WHERE id = %(task_id)s",
+        {"task_id": task_id},
+    ).fetchone()
+    if (
+        row is None
+        or row["bg_color_distribution"] is None
+        or row["bg_color_analyzed_image_count"] is None
+    ):
+        return None
+    return {
+        "distribution": dict(row["bg_color_distribution"]),
+        "analyzed_image_count": row["bg_color_analyzed_image_count"],
+    }
+
+
+def save_bg_color_distribution_cache(
+    conn: psycopg.Connection,
+    task_id: int,
+    *,
+    analyzed_image_count: int,
+    distribution: dict[str, float],
+) -> None:
+    conn.execute(
+        "UPDATE augmentation_tasks SET "
+        "bg_color_distribution = %(distribution)s, "
+        "bg_color_analyzed_image_count = %(analyzed_image_count)s, "
+        "bg_color_distribution_computed_at = now() "
+        "WHERE id = %(task_id)s",
+        {
+            "task_id": task_id,
+            "analyzed_image_count": analyzed_image_count,
+            "distribution": Jsonb(distribution),
+        },
+    )
 
 
 def increment_counts(

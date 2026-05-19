@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  BarChart3,
   FileText,
   HardDrive,
   ImageIcon,
@@ -28,9 +29,12 @@ type ProjectDetailViewProps = {
   isDeleting: boolean
   isRescanning: boolean
   rescanError: string | null
+  latestResultError: string | null
+  isOpeningLatestResult: boolean
   onStartAugmentation: () => void
   onRequestDelete: () => void
   onRescan: () => void
+  onOpenLatestResult: () => void
 }
 
 const STATUS_LABEL: Record<AugmentationTaskStatus, string> = {
@@ -56,9 +60,12 @@ export function ProjectDetailView({
   isDeleting,
   isRescanning,
   rescanError,
+  latestResultError,
+  isOpeningLatestResult,
   onStartAugmentation,
   onRequestDelete,
   onRescan,
+  onOpenLatestResult,
 }: ProjectDetailViewProps) {
   const folderName = pathBasename(project.sourceFolderPath) || project.title
 
@@ -111,6 +118,22 @@ export function ProjectDetailView({
           <div>
             <p className="font-medium">폴더 재스캔에 실패했습니다</p>
             <p className="mt-1 text-xs opacity-90">{rescanError}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {latestResultError ? (
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900"
+        >
+          <AlertCircle
+            className="mt-0.5 size-4 shrink-0"
+            aria-hidden="true"
+          />
+          <div>
+            <p className="font-medium">최근 결과를 불러오지 못했습니다</p>
+            <p className="mt-1 text-xs opacity-90">{latestResultError}</p>
           </div>
         </div>
       ) : null}
@@ -205,13 +228,33 @@ export function ProjectDetailView({
                   {project.latestTask.progress}%
                 </p>
               </div>
-              <span
-                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                  STATUS_BADGE[project.latestTask.status]
-                }`}
-              >
-                {STATUS_LABEL[project.latestTask.status]}
-              </span>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {project.latestTask.status === "DONE" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onOpenLatestResult}
+                    disabled={isOpeningLatestResult}
+                  >
+                    {isOpeningLatestResult ? (
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <BarChart3 className="size-4" aria-hidden="true" />
+                    )}
+                    결과 보기
+                  </Button>
+                ) : null}
+                <span
+                  className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                    STATUS_BADGE[project.latestTask.status]
+                  }`}
+                >
+                  {STATUS_LABEL[project.latestTask.status]}
+                </span>
+              </div>
             </div>
           </>
         ) : null}
