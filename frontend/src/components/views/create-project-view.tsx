@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ApiError, localFolders } from "@/lib/api"
 
 const TARGET_SPEC_OPTIONS = ["ISO 6346"]
+const IS_DOCKER_MODE = process.env.NEXT_PUBLIC_DOCKER_MODE === "true"
 
 type CreateProjectViewProps = {
   sourceFolderPath: string
@@ -56,7 +57,7 @@ export function CreateProjectView({
   }
 
   async function selectSourceFolder() {
-    if (isCreating || isSelectingFolder) return
+    if (IS_DOCKER_MODE || isCreating || isSelectingFolder) return
     setIsSelectingFolder(true)
     setFolderSelectionError(null)
     try {
@@ -96,38 +97,52 @@ export function CreateProjectView({
             <FolderOpen className="size-4" aria-hidden="true" />
             이미지 폴더
           </Label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div
+          {IS_DOCKER_MODE ? (
+            <Input
               id="source-folder-path"
-              className="min-h-10 min-w-0 flex-1 rounded-md border bg-muted/20 px-3 py-2 text-sm"
-            >
-              {sourceFolderPath ? (
-                <span className="break-all">{sourceFolderPath}</span>
-              ) : (
-                <span className="text-muted-foreground">
-                  선택된 폴더가 없습니다.
-                </span>
-              )}
+              value={sourceFolderPath}
+              onChange={(event) =>
+                onSourceFolderPathChange(event.target.value)
+              }
+              placeholder="/data/my-dataset"
+              disabled={isCreating}
+              required
+            />
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div
+                id="source-folder-path"
+                className="min-h-10 min-w-0 flex-1 rounded-md border bg-muted/20 px-3 py-2 text-sm"
+              >
+                {sourceFolderPath ? (
+                  <span className="break-all">{sourceFolderPath}</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    선택된 폴더가 없습니다.
+                  </span>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={selectSourceFolder}
+                disabled={isCreating || isSelectingFolder}
+              >
+                {isSelectingFolder ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <FolderOpen className="size-4" aria-hidden="true" />
+                )}
+                폴더 선택
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={selectSourceFolder}
-              disabled={isCreating || isSelectingFolder}
-            >
-              {isSelectingFolder ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <FolderOpen className="size-4" aria-hidden="true" />
-              )}
-              폴더 선택
-            </Button>
-          </div>
+          )}
           <p className="text-xs text-muted-foreground">
-            로컬 디스크의 이미지 폴더를 선택하세요. 백엔드가 해당 폴더를 읽을 수
-            있어야 합니다.
+            {IS_DOCKER_MODE
+              ? "Docker compose에서는 ./shared/data가 /data로 마운트됩니다. 예: /data/my-dataset"
+              : "로컬 디스크의 이미지 폴더를 선택하세요. 백엔드가 해당 폴더를 읽을 수 있어야 합니다."}
           </p>
-          {folderSelectionError ? (
+          {!IS_DOCKER_MODE && folderSelectionError ? (
             <p role="alert" className="text-xs text-rose-700">
               {folderSelectionError}
             </p>

@@ -1,13 +1,62 @@
 services:
+  proxy:
+    image: nginx:1.27-alpine
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    ports:
+      - "${APP_PORT:-3000}:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+        NEXT_PUBLIC_DOCKER_MODE: "true"
+    environment:
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      NEXT_PUBLIC_DOCKER_MODE: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: 3000
+    depends_on:
+      backend:
+        condition: service_started
+
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    environment:
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      BACKEND_DATABASE_URL: postgresql://${POSTGRES_USER:-myuser}:${POSTGRES_PASSWORD:-mypassword}@postgres:5432/${POSTGRES_DB:-mydatabase}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${DATASET_ROOT:-./shared/data}:/data
+
   postgres:
     image: postgres:16
-    container_name: container-data-aug-postgres
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydatabase
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mypassword}
+      POSTGRES_USER: ${POSTGRES_USER:-myuser}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-mydatabase}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - postgres_data:/var/lib/postgresql/data

@@ -1,0 +1,9 @@
+.next
+build
+coverage
+Dockerfile
+node_modules
+npm-debug.log*
+out
+pnpm-debug.log*
+*.tsbuildinfo

@@ -1,0 +1,16 @@
+services:
+  backend:
+    build:
+      target: runtime-gpu
+    environment:
+      HF_HOME: /models/huggingface
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_VISIBLE_DEVICES: all
+      TORCH_HOME: /models/torch
+      TRANSFORMERS_CACHE: /models/huggingface/transformers
+    gpus: all
+    volumes:
+      - model_cache:/models
+
+volumes:
+  model_cache:

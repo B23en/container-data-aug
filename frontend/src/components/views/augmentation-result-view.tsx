@@ -72,6 +72,7 @@ const BG_SWATCH: Record<string, string> = {
   gray: "#8b8b8b",
   black: "#111827",
 }
+const IS_DOCKER_MODE = process.env.NEXT_PUBLIC_DOCKER_MODE === "true"
 
 /**
  * Final summary shown after a task transitions to DONE. Distribution panels
@@ -91,6 +92,7 @@ export function AugmentationResultView({
     status: "loading",
   })
   const folderName = pathBasename(project.sourceFolderPath) || project.title
+  const hostOutputPath = dockerHostPath(result.outputFolderPath)
 
   const loadCharDistribution = useCallback(
     async (signal?: AbortSignal) => {
@@ -144,7 +146,7 @@ export function AugmentationResultView({
   }, [loadBgColorDistribution, loadCharDistribution])
 
   async function openOutputFolder() {
-    if (isOpeningFolder) return
+    if (IS_DOCKER_MODE || isOpeningFolder) return
     setIsOpeningFolder(true)
     setFolderOpenError(null)
     try {
@@ -178,9 +180,7 @@ export function AugmentationResultView({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold">
-                  Task #{result.taskId} 완료
-                </p>
+                <p className="text-sm font-semibold">증강 작업 완료</p>
                 <Badge variant="success">DONE</Badge>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -189,19 +189,24 @@ export function AugmentationResultView({
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={openOutputFolder}
-              disabled={isOpeningFolder}
-            >
-              {isOpeningFolder ? (
-                <RotateCcw className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <FolderOpen className="size-4" aria-hidden="true" />
-              )}
-              저장 폴더 위치 확인
-            </Button>
+            {!IS_DOCKER_MODE ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={openOutputFolder}
+                disabled={isOpeningFolder}
+              >
+                {isOpeningFolder ? (
+                  <RotateCcw
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <FolderOpen className="size-4" aria-hidden="true" />
+                )}
+                저장 폴더 위치 확인
+              </Button>
+            ) : null}
             <Button type="button" onClick={onBackToDetail}>
               <RotateCcw className="size-4" aria-hidden="true" />
               프로젝트 상세로 돌아가기
@@ -219,6 +224,22 @@ export function AugmentationResultView({
         ) : null}
 
         <Separator />
+
+        {IS_DOCKER_MODE ? (
+          <>
+            <div className="grid gap-3 p-5 text-sm md:grid-cols-2">
+              <PathCallout
+                label="컨테이너 결과 경로"
+                value={result.outputFolderPath}
+              />
+              <PathCallout
+                label="호스트 결과 경로"
+                value={hostOutputPath ?? "./shared/data"}
+              />
+            </div>
+            <Separator />
+          </>
+        ) : null}
 
         <div className="grid gap-4 p-5 md:grid-cols-4">
           <ResultMetric
@@ -249,7 +270,7 @@ export function AugmentationResultView({
           <div>
             <p className="text-sm font-semibold">분포 분석</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Task #{result.taskId} 산출물을 기준으로 계산합니다.
+              이번 증강 산출물을 기준으로 계산합니다.
             </p>
           </div>
         </div>
@@ -537,6 +558,25 @@ function describeDistributionError(error: unknown): string {
 
 function sumCounts(counts: Record<string, number>): number {
   return Object.values(counts).reduce((sum, value) => sum + value, 0)
+}
+
+function dockerHostPath(containerPath: string): string | null {
+  if (containerPath === "/data") {
+    return "./shared/data"
+  }
+  if (!containerPath.startsWith("/data/")) {
+    return null
+  }
+  return `./shared/data/${containerPath.slice("/data/".length)}`
+}
+
+function PathCallout({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
+      <code className="break-all text-xs text-foreground">{value}</code>
+    </div>
+  )
 }
 
 function ResultMetric({

@@ -1,0 +1,10 @@
+.pytest_cache
+.uv-cache
+.venv
+Dockerfile
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+temp
