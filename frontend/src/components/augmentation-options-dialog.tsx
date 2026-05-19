@@ -2,7 +2,6 @@
 
 import {
   AlertCircle,
-  Cpu,
   FolderOutput,
   ImageIcon,
   Layers,
@@ -27,9 +26,7 @@ import type {
   Project,
 } from "@/types/project"
 
-const DEFAULT_WORKER_COUNT = 4
-const MIN_WORKER_COUNT = 1
-const MAX_WORKER_COUNT = 8
+const DEFAULT_WORKER_COUNT = 1
 
 const DEFAULT_VARIANTS_PER_IMAGE = 10
 const MIN_VARIANTS_PER_IMAGE = 1
@@ -45,8 +42,8 @@ type AugmentationOptionsDialogProps = {
 }
 
 /**
- * Modal that collects the three MVP augmentation options
- * (workerCount, variantsPerImage, outputFolderName) before AppShell submits
+ * Modal that collects the MVP augmentation options
+ * (variantsPerImage, outputFolderName) before AppShell submits
  * `POST /api/projects/{id}/augmentation-tasks`.
  *
  * The actual form lives in `OptionsForm`, mounted only while `open` is true.
@@ -100,24 +97,12 @@ function OptionsForm({
   onCancel,
   onStart,
 }: OptionsFormProps) {
-  const [workerCount, setWorkerCount] = useState(DEFAULT_WORKER_COUNT)
   const [outputFolderName, setOutputFolderName] = useState(() =>
     defaultOutputFolderName(project),
   )
   const [variantsPerImage, setVariantsPerImage] = useState(
     DEFAULT_VARIANTS_PER_IMAGE,
   )
-
-  function updateWorkerCount(value: string) {
-    const parsed = Number(value)
-    if (!Number.isFinite(parsed)) {
-      setWorkerCount(DEFAULT_WORKER_COUNT)
-      return
-    }
-    setWorkerCount(
-      Math.min(MAX_WORKER_COUNT, Math.max(MIN_WORKER_COUNT, parsed)),
-    )
-  }
 
   function updateVariantsPerImage(value: string) {
     // Empty input → keep showing the default rather than NaN.
@@ -144,7 +129,7 @@ function OptionsForm({
     const trimmed = outputFolderName.trim()
     if (!trimmed) return
     onStart({
-      workerCount,
+      workerCount: DEFAULT_WORKER_COUNT,
       runOcrLabeling: true,
       outputFolderName: trimmed,
       variantsPerImage,
@@ -159,7 +144,7 @@ function OptionsForm({
       <DialogHeader>
         <DialogTitle>증강 옵션 설정</DialogTitle>
         <DialogDescription>
-          현재 프로젝트의 이미지를 백엔드 워커가 증강 처리합니다.
+          현재 프로젝트의 이미지를 백엔드가 증강 처리합니다.
         </DialogDescription>
       </DialogHeader>
 
@@ -174,26 +159,6 @@ function OptionsForm({
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {project?.title ?? "선택된 프로젝트가 없습니다"}
-          </p>
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="worker-count">
-            <Cpu className="size-4" aria-hidden="true" />
-            멀티 스레드 워커 수
-          </Label>
-          <Input
-            id="worker-count"
-            type="number"
-            min={MIN_WORKER_COUNT}
-            max={MAX_WORKER_COUNT}
-            value={workerCount}
-            onChange={(event) => updateWorkerCount(event.target.value)}
-            disabled={isStarting}
-          />
-          <p className="text-xs text-muted-foreground">
-            {MIN_WORKER_COUNT}~{MAX_WORKER_COUNT}개 사이에서 선택합니다.
-            기본값은 {DEFAULT_WORKER_COUNT}개입니다.
           </p>
         </div>
 

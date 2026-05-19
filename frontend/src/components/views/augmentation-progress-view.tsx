@@ -1,6 +1,6 @@
 "use client"
 
-import { Cpu, Images, Loader2, Play, RotateCcw, XCircle } from "lucide-react"
+import { Images, Loader2, Play, RotateCcw, XCircle } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -39,7 +39,7 @@ export function AugmentationProgressView({
           {project.title}
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          백엔드 워커가 프로젝트 이미지를 처리하는 상태를 1초마다 갱신합니다.
+          백엔드가 프로젝트 이미지를 처리하는 상태를 1초마다 갱신합니다.
         </p>
       </div>
 
@@ -87,12 +87,7 @@ export function AugmentationProgressView({
             <Progress value={progress} aria-label="증강 진행률" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
-            <ProgressMetric
-              icon={<Cpu className="size-4" aria-hidden="true" />}
-              label="전체 워커"
-              value={`${task.workerCount}개`}
-            />
+          <div className="grid gap-4 md:grid-cols-3">
             <ProgressMetric
               icon={<Images className="size-4" aria-hidden="true" />}
               label="전체 이미지"

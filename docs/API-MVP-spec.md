@@ -47,13 +47,14 @@
 - 증강 결과물은 로컬 출력 폴더에 저장한다.
 - 동시에 실행 가능한 증강 작업은 전역 1개다.
 - 프론트엔드는 1초 간격 polling으로 작업 상태를 조회한다.
-- MVP 증강 옵션은 아래 4개만 지원한다:
+- MVP 증강 API는 아래 4개 필드를 받는다:
   - `workerCount`
   - `runOcrLabeling`
   - `variantsPerImage`
   - `outputFolderName`
-- 프론트엔드 옵션 모달은 `workerCount`, `variantsPerImage`, `outputFolderName`만 노출한다.
+- 프론트엔드 옵션 모달은 `variantsPerImage`, `outputFolderName`만 노출한다.
 - 프론트엔드는 현재 `runOcrLabeling`을 사용자에게 선택받지 않고 `true`로 고정 전송한다.
+- 프론트엔드는 현재 `workerCount`를 사용자에게 선택받지 않고 `1`로 고정 전송한다.
 - `workerCount`를 생략하면 기본값은 `1`이다.
 - `workerCount` 값은 작업 옵션으로 저장/응답하지만, MVP runner는 실제로 항상 단일 실행 흐름으로 처리한다.
 - 실제 증강 구현에서는 하나의 원본 이미지에서 여러 개의 증강 결과물을 생성할 수 있으며, 원본 이미지 1장당 생성할 결과물 수는 `variantsPerImage`로 설정한다.
@@ -492,7 +493,7 @@ Request:
 
 ```json
 {
-  "workerCount": 4,
+  "workerCount": 1,
   "runOcrLabeling": true,
   "variantsPerImage": 3,
   "outputFolderName": "container-images-augmented"
@@ -505,6 +506,7 @@ Validation:
 - `variantsPerImage`를 생략하면 기본값은 `1`이다. 값을 보내면 1 이상 90 이하여야 한다. 범위 밖은 `422 VALIDATION_ERROR`.
 - `outputFolderName`은 비어 있으면 안 된다.
 - `runOcrLabeling`은 호환용 저장 필드이며 현재 프론트엔드에서는 선택 UI를 제공하지 않고 `true`로 고정 전송한다.
+- `workerCount`는 호환용 저장 필드이며 현재 프론트엔드에서는 선택 UI를 제공하지 않고 `1`로 고정 전송한다.
 - 백엔드가 출력 폴더를 생성하거나 쓸 수 있어야 한다.
 
 Response `201`: `AugmentationTask`
@@ -627,7 +629,7 @@ Response `200`: `BgColorDistribution`
 ### 8.3 증강 시작
 
 1. 사용자가 프로젝트 상세에서 `증강 프로세스 시작`을 누른다.
-2. 옵션 모달에서 `workerCount`, `variantsPerImage`, `outputFolderName`을 입력한다. 프론트엔드는 `runOcrLabeling: true`를 함께 전송한다. `workerCount`와 `variantsPerImage`를 생략하면 기본값은 각각 `1`이다.
+2. 옵션 모달에서 `variantsPerImage`, `outputFolderName`을 입력한다. 프론트엔드는 `workerCount: 1`, `runOcrLabeling: true`를 함께 전송한다. `variantsPerImage`를 생략하면 기본값은 `1`이다.
 3. 프론트엔드는 중앙 모델 준비 팝업을 띄우고 `POST /api/runtime-models/craft/prepare`, `POST /api/runtime-models/glm/prepare`를 순서대로 호출한다.
 4. 각 모델 준비 중에는 spinner를, 완료 시에는 check 표시를 보여준다. 두 모델이 모두 `READY`이면 약 1초 뒤 팝업을 닫는다.
 5. 프론트엔드가 `POST /api/projects/{projectId}/augmentation-tasks`를 호출한다.
