@@ -20,7 +20,7 @@
 ## TO-DO
 `완료한 내용의 경우: 해당 내용 관련 링크 추가 → ☑︎ 마크로 수정`
 ### 7주차 진행사항
-- ☑ **Shuffle 결과 분포 시각화** - Shuffle 결과물에 대한 데이터 분포 시각화 기능 구현 by `최규문`
+- ☑ **Shuffle 결과 분포 시각화** - Shuffle 결과물에 대한 데이터 분포 시각화 기능 구현 [#1](./docs/screenshots/dist_1.png)∙[#2](./docs/screenshots/dist_2.png) by `최규문`
 - ☑ **Docker Compose** - docker compose 형태로 구조화 by `손원빈`
 ---
 ### 6주차 진행사항
